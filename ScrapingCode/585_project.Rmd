@@ -1,0 +1,556 @@
+---
+title: "Scraping and Cleaning the Datasets"
+author: "Ryan Morgan"
+date: "April 17, 2017"
+output: pdf_document
+---
+
+
+
+```{r}
+
+library(tidyverse)
+
+library(rvest)
+
+library(lubridate)
+```
+
+First of all, read in a list of all the Schools:
+
+```{r}
+TeamList <- read_html("http://www.sports-reference.com/cfb/schools/") %>% html_nodes("th+.left a") %>% html_text()
+```
+
+
+Eventually I realized it would be useful to write a function that converts a text column into numbers. I struggled for some reason getting this to work, but eventually found that using as.numeric and paste worked.I thought it would be easier to write a function that I reference multiple times instead of going through this process time after time. I wrote a function called asNumber that will take in a data frame and a list of columns that the user wants converted to a number.
+
+
+```{r}
+asNumber <- function(dataframe, columns){
+  temp= dataframe
+  i = 1
+  for(i in columns){
+    temp[,i] = as.numeric(paste(dataframe[,i]))
+  }
+return(temp)
+}
+
+```
+
+I also realize that I want a function that can take in a team's name and format it properly for the links on the website. For example "Texas A&M" is formatted as "texas-am". There are several team names that are formatted differently on the website than their links. I adjusted those team names in this function (for example, changing "lsu" to "louisiana-state").
+
+
+```{r}
+nameFormat <- function(originalNames){
+ans <- tolower(originalNames)
+ans <- gsub(" ","-",ans)
+ans <- gsub("[()]*","",ans)
+
+ans <- gsub("[&]","",ans)
+
+ans <- gsub("--","-",ans)
+
+ans <- gsub("'","",ans)
+
+####REPLACE "LSU" WITH "louisiana state"
+
+ans <- gsub("lsu","louisiana-state",ans)
+
+
+#####REPLACE "SMU" WITH "southern methodist"
+
+ans <- gsub("smu","southern-methodist",ans)
+
+
+######REPLACE "OLE MISS" WITH "mississippi"
+
+ans <-gsub("ole-miss", "mississippi", ans)
+
+#######REPLACE "Pitt" WITH "pittsburgh"
+
+ans <- gsub("pitt$","pittsburgh",ans)
+
+
+#######REPLACE "UAB" WITH "alabama-birmingham"
+
+ans <- gsub("uab","alabama-birmingham",ans)
+
+#######REPLACE "UCF" WITH "central-florida"
+
+ans <- gsub("ucf","central-florida",ans)
+
+######REPLACE "usc" WITH "southern-california"
+
+ans <- gsub("usc","southern-california",ans)
+
+######REPLACE "UTEP" WITH "texas-el-paso"
+
+ans <- gsub("utep","texas-el-paso",ans)
+
+######REPLACE "UTSA" WITH "texas-san-antonio"
+
+ans <- gsub("utsa","texas-san-antonio",ans)
+
+return(ans)
+}
+
+```
+
+I also wrote a function called "yearsActive" to give a list of all the active seasons for a given team.
+
+```{r}
+yearsActive <- function(team){
+  data =read_school_history(team)$Year
+  
+  return(data)
+}
+
+```
+
+
+I then wrote a function to read in the school history page for teams (ex: http://www.sports-reference.com/cfb/schools/nebraska/). Within the function, I scrape, format, and clean the data.
+
+```{r}
+read_school_history <- function(team){
+  team <- nameFormat(team)
+  
+  url = paste("http://www.sports-reference.com/cfb/schools/",team,"/", sep="")
+  
+  
+  nodesText <- paste("poptip,td,#",team,"_clone a",sep="")
+  
+  
+  schoolHistory <- read_html(url) %>% html_nodes(nodesText) %>% html_text()
+  
+  schoolHistory <- as.data.frame(matrix(data=schoolHistory,ncol=14, byrow=T))
+  
+  colnames(schoolHistory) = c("Year","Conf","W","L","T","Pct","SRS","SOS","AP_Pre","AP_High","AP_Post","Coach(es)","Bowl","Notes")
+  
+  schoolHistory$Bowl_Result = gsub("[[:print:]]*[-]","",schoolHistory$Bowl)
+  
+  schoolHistory$Bowl_Result = gsub("W","Win",schoolHistory$Bowl_Result)
+  
+  schoolHistory$Bowl_Result = gsub("L","Loss",schoolHistory$Bowl_Result)
+  
+  schoolHistory$Bowl_Result = gsub("T","Tie",schoolHistory$Bowl_Result)
+  
+  schoolHistory$Bowl = gsub("[-][WLT]","",schoolHistory$Bowl)
+  
+  schoolHistory$Team = rep(team,length(schoolHistory[,1]))
+  
+  schoolHistory = asNumber(schoolHistory,c(1,3,4,5,6,7,8,9,10,11))
+  
+  
+  schoolHistory <- schoolHistory[c(16, 1:9,11,10,12,13,15,14)]
+  
+  schoolHistory
+}
+
+```
+
+Each team has a page that has more detailed statistics for each year that team was active (ex: http://www.sports-reference.com/cfb/schools/nebraska/2016.html). I wrote a function to read in the first table displayed on these pages. This table has an offensive row, a defensive row, and a row that takes the difference between the two rows. 
+
+I called the function "read_team_stats". Within the function, I scrape, clean, and format the data for a given team and season.
+
+```{r}
+read_team_stats <- function(team,year){
+  
+  team <- nameFormat(team)
+  
+  url=paste("http://www.sports-reference.com/cfb/schools/",team,"/",year,".html",sep="")
+  
+  teamStats <- read_html(url) %>% html_nodes("#team td") %>% html_text()
+  
+  teamStats <- as.data.frame(matrix(teamStats,ncol=22, byrow = T))
+  
+  colnames(teamStats) =c("Games","Completions","Pass_Attempts","Completion_Percentage","Passing_Yards","Passing_TD","Rushing_Attempts","Rushing_Yards","Rushing_Avg","Rushing_TD","Plays","Total_Yards","Yards_Per_Play","Pass_First_Downs","Rush_First_Downs","Penalty_First_Downs","Total_First_Downs","Number_Of_Penalties","Penalty_Yards","Fumbles","Interceptions","Turnovers")
+  
+  
+  
+  teamStats <- asNumber(teamStats, c(1:22))
+  
+  teamStats$Season = rep(year,3)
+  teamStats$Team = rep(team, 3)
+  
+  conf <- paste((read_school_history(team) %>% filter(Year==year)%>% select(Conf))[1,1])
+  
+  teamStats$Conference = rep(conf, 3)
+  
+  teamStats <- teamStats[c(24,23,25,1:22)]
+  
+  teamStats$Type = c("Offense","Defense","Difference")
+  
+  teamStats <- teamStats[c(1:3,26,4:25)]
+  
+  teamStats
+}
+
+
+```
+
+
+Each team's season also has a "schedule and results" page (ex: http://www.sports-reference.com/cfb/schools/nebraska/2016-schedule.html). I also wrote a function to read in the table on this page. The funtion scrapes, cleans, and formats the table.
+
+```{r}
+
+read_schedule_results <- function(team,year){
+  
+  team <- nameFormat(team)
+  
+  if(year>1995){
+  url=paste("http://www.sports-reference.com/cfb/schools/",team,"/",year,"-schedule.html",sep="")
+  
+  scheduleResults <- read_html(url) %>% html_nodes(".right, .left") %>% html_text()
+  
+
+  scheduleResults <- as.data.frame(matrix(scheduleResults,ncol=14,byrow = T))
+  
+  colnames(scheduleResults) = c("Game_Number","Date","Day","Team","Location","Opponent","OpponentConf","Result","Points","Opponent_Points","TotalWins","TotalLosses","Streak","Notes")
+  
+  }
+  
+  else{
+      url=paste("http://www.sports-reference.com/cfb/schools/",team,"/",year,"-schedule.html",sep="")
+  
+  scheduleResults <- read_html(url) %>% html_nodes(".right, .left") %>% html_text()
+  
+
+  scheduleResults <- as.data.frame(matrix(scheduleResults,ncol=15,byrow = T))
+  
+  colnames(scheduleResults) = c("Game_Number","Date","Day","Team","Location","Opponent","OpponentConf","Result","Points","Opponent_Points","TotalWins","TotalLosses","del","Streak","Notes")
+  
+  scheduleResults = scheduleResults %>% select(-del)
+    
+  }
+  
+  #FIX THE DATE COLUMN
+  
+  scheduleResults$Date <- mdy(scheduleResults$Date)
+  
+  
+  #USE PARSING TO GET A COLUMN OF TEAM RANKINGS
+  
+  ranks <- gsub("[[:alpha:]]*","",scheduleResults$Team)
+  
+  ranks <- gsub("[()&\\s-]","",ranks)
+  
+  ranks <- gsub("\\s","", ranks)
+  
+  scheduleResults$TeamRank <- ranks
+  
+  #Make it so the school column is just the name, not the rankings.
+  
+  scheduleResults$Team = rep(team, length(scheduleResults$Date))
+  
+  
+  #CREATE A COLUMN TO SAY EITHER "HOME" "AWAY" OR "NEUTRAL"
+
+  
+  scheduleResults$Location <- gsub("N","Neutral",scheduleResults$Location)
+  
+  
+  scheduleResults$Location <- gsub("@","Away",scheduleResults$Location)
+  
+
+  temp = scheduleResults$Location
+  
+  temp[temp==""] = "Home"
+  
+  scheduleResults$Location = temp
+  
+  #CREATE COLUMN WITH OPPONENT RANK
+  ranks <- gsub("[[:alpha:]]*","",scheduleResults$Opponent)
+  
+  ranks <- gsub("[()&\\s-]","",ranks)
+  
+  ranks <- gsub("\\s","", ranks)
+  
+  scheduleResults$OpponentRank <- ranks
+  
+  
+  #Make it so the opponent column is just the name, not the rankings.
+  
+  scheduleResults$Opponent = gsub("[(][[:digit:]]*[)]","",scheduleResults$Opponent)
+  
+  
+  #You'll have to fix the " " at the beginning of ranked opponents names.
+  
+  scheduleResults$Opponent = gsub(intToUtf8(160),"",scheduleResults$Opponent)
+  
+  #Fix the formatting of team names
+  
+  scheduleResults$Team = nameFormat(scheduleResults$Team)
+  
+  scheduleResults$Opponent = nameFormat(scheduleResults$Opponent)
+  
+  #Create a column with the season
+  
+  scheduleResults$Season = rep(year, length(scheduleResults$Opponent))
+  
+  
+  #USE THE ASNUMBER FUNCTION TO MAKE COLUMNS NUMBERS.
+  
+  scheduleResults <- asNumber(scheduleResults, c(1,9:12,15,16))
+  
+  conf <-   conf <- paste((read_school_history(team) %>% filter(Year==year)%>% select(Conf))[1,1])
+  
+  scheduleResults$Conference = rep(conf, length(scheduleResults$Team))
+  
+ scheduleResults <- scheduleResults[c(4,17,18,1,2,3,5,15,6,16,7,8,9:14)]
+
+    
+    
+    
+return(scheduleResults)
+  
+
+}
+
+```
+
+
+Now that we have all of the functions to scrape the data, we want to scrape the data for the teams and seasons we want information on.
+
+We want to read in the "School History" pages for every team available. We will store this as "All_Schools_History"
+
+mult_history is a function to use the read_school_history function on multiple schools.
+```{r}
+
+mult_history <- function(teams){
+  numteams = length(teams)
+  
+  output = read_school_history(teams[1])
+  
+  i=2
+  
+  for(i in 2:numteams){
+    output <- rbind(output, read_school_history(teams[i]))
+    
+  }
+  
+  output
+  
+}
+
+
+```
+
+We found a list of all the teams the website has data on earlier, stored as "teamsList". So I'll use that list to read in the schools history for every school on the website. It is stored as "All_Schools_History".
+
+```{r}
+All_Schools_History <- mult_history(teams=TeamList)
+
+```
+
+
+Next, we want to use the read_team_stats function on all the teams. 
+
+Since there is only detailed team stats for teams since the year 2000, we will use a cut-off of the year 2000.I first write a function to read in the team stats for a single team for every year.
+
+```{r}
+
+all_single_team_stats <- function(team){
+  team <- nameFormat(team)
+  
+  seasons <- yearsActive(team)
+  
+  seasons <- seasons[seasons>1999]
+  
+  num <- length(seasons)
+  
+  indexing <- data.frame(season = seasons)
+  
+  teamStats <- read_team_stats(team,indexing$season[1])
+  
+  i=2
+  
+  for(i in 2:num){
+    newStats = read_team_stats(team,indexing$season[i])
+    
+    teamStats = rbind(teamStats,newStats)
+    
+  }
+  return(teamStats)
+  
+}
+
+
+```
+
+
+I then wrote a function that uses the all_single_team_stats function for multiple teams.
+
+
+```{r}
+mult_team_stats <- function(teams){
+  
+  numteams = length(teams)
+  
+  output = all_single_team_stats(teams[1])
+  
+  i=2
+  
+  for(i in 2:numteams){
+    output <- rbind(output, all_single_team_stats(teams[i]))
+    
+  }
+  
+  output
+}
+
+```
+
+
+We now need to filter our list of teams down to those that have been active since the year 2000. For some reason, the function wasn't working for Florida a&m, so that school was removed.
+
+
+```{r}
+
+team_history_totals <- function(){
+  url = "http://www.sports-reference.com/cfb/schools/"
+  
+  nodes <- "td"
+  
+  ans <- read_html(url) %>% html_nodes(nodes) %>% html_text()
+  
+  
+  ans <- as.data.frame(matrix(ans, ncol= 19, byrow =T))
+  
+  colnames(ans) = c("Team","First_Year","Last_Year","Num_Seasons","Games","Wins","Losses","Ties","Winning_Pct","Bowl_Games","Bowl_Wins","Bowl_Losses","Bowl_Ties","Bowl_Winning_Pct","SRS","SOS", "Years_Ranked_In_AP","Conference_Championships","Notes")
+  
+  ans$Team = nameFormat(ans$Team)
+  
+  ans = asNumber(ans, c(2:18))
+  
+  return(ans)
+  
+}
+
+
+
+teams_since_2000 <- team_history_totals() %>% filter(Last_Year > 1999)
+
+teamsfiltered <- teams_since_2000$Team
+
+#Remove Florida a&m
+
+teamsfiltered <- teamsfiltered[-30]
+
+
+```
+
+We will now read in the team stats for each of the teams who have played since 2000. Stored as All_Schools_Team_Stats_Post2000
+
+
+```{r}
+All_Schools_Team_Stats_Post2000 <- mult_team_stats(teamsfiltered)
+
+```
+
+The last page we want to read in for each school and year is the schedule page. 
+
+First, make it so it reads all the schedule results for a single team.
+
+
+```{r}
+all_single_team_schedule<- function(team){
+  
+  team <- nameFormat(team)
+  
+  seasons <- yearsActive(team)
+  
+  num <- length(seasons)
+  
+  indexing <- data.frame(season = seasons)
+  
+  schedules <- read_schedule_results(team,indexing$season[1])
+  
+  i=2
+  
+  for(i in 2:num){
+    newSchedule = read_schedule_results(team,indexing$season[i])
+    
+    schedules = rbind(schedules,newSchedule)
+    
+  }
+  return(schedules)
+  
+  
+}
+
+```
+
+
+Now, I will make it so this funciton can be used on multiple teams.
+
+
+```{r}
+
+mult_team_schedule<- function(teams){
+  
+  numteams = length(teams)
+  
+  output = all_single_team_schedule(teams[1])
+  
+  i=2
+  
+  for(i in 2:numteams){
+    output <- rbind(output, all_single_team_schedule(teams[i]))
+    
+  }
+  
+  output
+  
+}
+
+```
+
+Reading in the scheudles takes a really long time to run, so to avoid running the function on every single team, I only run it for the teams that are currently in the Pac12, ACC, Big12, Big10, or SEC. These 5 conferences are commonly refered to as "The power 5", as most of the best teams in the country are consistently in one of these 5 conferences.
+
+```{r}
+currentPac12 <- c("washington","washington-state","stanford","california","oregon-state","oregon","colorado","southern-california","utah","arizona-state","ucla","arizona")
+
+Pac12Schedules <- mult_team_schedule(currentPac12)
+
+currentBigTen <- c("nebraska","iowa","michigan","michigan-state","ohio-state","rutgers","maryland","minnesota","indiana","northwestern","penn-state","purdue", "illinois","wisconsin")
+
+
+BigTenSchedules <- mult_team_schedule(currentBigTen)
+
+currentBig12 <- c("iowa-state", "kansas","kansas-state","oklahoma","oklahoma-state","west-virginia","texas","texas-tech","baylor","texas-christian")
+
+Big12Schedules <- mult_team_schedule(currentBig12)
+
+currentSEC <- c("alabama","florida","auburn", "mississippi-state","louisiana-state","mississippi","vanderbilt","tennessee","texas-am","missouri","kentucky","south-carolina","arkansas","georgia")
+
+SECSchedules <- mult_team_schedule(currentSEC)
+
+currentACC <- c("boston-college","clemson","florida-state","louisville","north-carolina-state","syracuse","wake-forest","duke","georgia-tech","miami-fl","north-carolina","pittsburgh","virginia","virginia-tech")
+
+accSchedules <- mult_team_schedule(currentACC)
+
+power5Schedules <- rbind(Pac12Schedules, BigTenSchedules, Big12Schedules, SECSchedules, accSchedules)
+```
+
+To avoid having to do the webscraping every session, I am storing these huge data frames as csv files.
+
+
+```{r}
+write_csv(All_Schools_History,"All_Schools_History.csv")
+
+write_csv(All_Schools_Team_Stats_Post2000, "All_Schools_Team_Stats_Post2000.csv")
+
+write_csv(Pac12Schedules, "pac12Schedules.csv")
+
+write_csv(BigTenSchedules, "bigtenschedules.csv")
+
+write_csv(Big12Schedules, "big12Schedules.csv")
+
+write_csv(SECSchedules, "SECSchedules.csv")
+
+write_csv(accSchedules, "accSchedules.csv")
+
+
+write_csv(power5Schedules,"power5Schedules.csv")
+```
