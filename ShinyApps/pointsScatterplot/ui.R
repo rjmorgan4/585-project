@@ -5,8 +5,8 @@
 
 library(shiny)
 library(ggplot2)
-library(dplyr)
 library(plotly)
+library(dplyr)
 
 
 ##Read in a data set that is saved to the same folder
@@ -25,7 +25,7 @@ shinyUI(fluidPage(
     #can put selected input things here
     
     
-    sliderInput("Seasons","Selected Seasons",1885,2016,value = c(1900,2016)),
+    sliderInput("Seasons","Selected Seasons",1865,2016,value = c(1865,2016)),
     
     selectInput("conf","Conference",choices=unique(schedules$Conference)),
     

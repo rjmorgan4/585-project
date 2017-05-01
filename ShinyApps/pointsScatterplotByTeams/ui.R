@@ -5,9 +5,8 @@
 
 library(shiny)
 library(ggplot2)
-library(dplyr)
 library(plotly)
-
+library(dplyr)
 
 ##Read in a data set that is saved to the same folder
 
@@ -32,7 +31,13 @@ shinyUI(fluidPage(
     radioButtons("wlLine","Win Loss Line",choices = c("Yes","No"), selected = "No"),
     
     
-    checkboxGroupInput("teams","Selected Teams",choices=unique(schedules$Team), selected=c("nebraska","iowa-state","iowa"))
+    #Currently Restricted to teams Currently in the Big 10 or the Big 12.
+    
+    checkboxGroupInput("teams","Selected Teams",choices=c("nebraska","iowa","michigan","michigan-state","ohio-state",
+                                                          "rutgers","maryland","minnesota","indiana","northwestern","penn-state",
+                                                          "purdue","illinois","wisconsin","iowa-state","kansas","kansas-state","oklahoma",
+                                                          "oklahoma-state","west-virginia","texas","texas-tech","baylor","texas-christian")
+                       , selected=c("nebraska","iowa-state","iowa"))
     
   ),
   

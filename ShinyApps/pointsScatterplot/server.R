@@ -5,8 +5,8 @@
 
 library(shiny)
 library(ggplot2)
-library(dplyr)
 library(plotly)
+library(dplyr)
 
 
 ##Read in a data set that is saved to the same folder
@@ -28,14 +28,15 @@ shinyServer(function(input, output) {
   
   plot<- reactive({
     graph <- filteredData() %>% ggplot(aes(x=Opponent_Points,y = Points, color=Result, shape=Location)) +
-      geom_point()+
-      facet_wrap(~Team)+geom_hline(yintercept = input$cutoff,color="red", lty=2, size=.2) +geom_vline(xintercept = input$cutoff, color = "red",lty=2, size=.2)+
+      geom_point()+geom_hline(yintercept = input$cutoff,color="red", lty=2, size=.2) +geom_vline(xintercept = input$cutoff, color = "red",lty=2, size=.2)+
+      facet_wrap(~Team)+
       ggtitle(paste("Points Scatterplot for ",input$conf,"teams during the years ",input$Seasons[1]," through", input$Seasons[2]))+
       theme(plot.title=element_text(size=12))+
       xlab("Points Given up")+
       ylab("Points Scored")+
     
     if(input$wlLine=="Yes"){geom_abline(slope=1,intercept = 0, size=.2)}
+    
   })
   
   output$graph = renderPlotly(

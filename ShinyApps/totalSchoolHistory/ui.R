@@ -5,7 +5,6 @@
 
 library(shiny)
 library(ggplot2)
-library(dplyr)
 library(plotly)
 
 
@@ -25,11 +24,15 @@ shinyUI(fluidPage(
     #can put selected input things here
 
     
-    sliderInput("Seasons","Selected Seasons",1885,2016,value = c(1900,2016)),
+    sliderInput("Seasons","Selected Seasons",1865,2016,value = c(1865,2016)),
     
     radioButtons("yvariable","Value Displayed",choices=colnames(totalSchoolHistory)[3:7], selected="totalWins"),
     
-    checkboxGroupInput("selectedTeams","Teams", choices= unique(totalSchoolHistory$Team), selected = c("nebraska","iowa-state"))
+    checkboxGroupInput("selectedTeams","Teams", choices= c("nebraska","iowa","michigan","michigan-state","ohio-state","rutgers","maryland",
+                                                           "minnesota","indiana","northwestern","penn-state","purdue", "illinois",
+                                                           "wisconsin","iowa-state", "kansas","kansas-state","oklahoma","oklahoma-state",
+                                                           "west-virginia","texas","texas-tech","baylor","texas-christian"), 
+                       selected = c("nebraska","iowa-state"))
     
     
     

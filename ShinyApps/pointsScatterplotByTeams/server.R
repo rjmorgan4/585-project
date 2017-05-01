@@ -5,8 +5,8 @@
 
 library(shiny)
 library(ggplot2)
-library(dplyr)
 library(plotly)
+library(dplyr)
 
 
 ##Read in a data set that is saved to the same folder
